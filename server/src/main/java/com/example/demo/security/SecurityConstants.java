@@ -4,7 +4,6 @@ public class SecurityConstants {
 
     public static final String SIGN_UP_URLS = "/api/auth/**";
 
-    // Ключ 32+ байта для HS256 (256 бит)
     public static final String SECRET = "MySecretKeyForJWTThatIs32CharactersLongEnough12345";
 
     public static final String TOKEN_PREFIX = "Bearer ";

@@ -24,10 +24,8 @@ public class JWTTokenProvider {
     public JWTTokenProvider() {
         byte[] keyBytes = SecurityConstants.SECRET.getBytes(StandardCharsets.UTF_8);
 
-        // Проверяем длину для HS256 (минимум 32 байта)
         if (keyBytes.length < 32) {
             LOG.warn("Secret key is too short ({} bytes). Using generated key.", keyBytes.length);
-            // Генерируем минимальный ключ если текущий слишком короткий
             byte[] secureKey = new byte[32];
             new java.security.SecureRandom().nextBytes(secureKey);
             this.secretKey = Keys.hmacShaKeyFor(secureKey);
@@ -55,7 +53,7 @@ public class JWTTokenProvider {
                 .addClaims(claimsMap)
                 .setIssuedAt(now)
                 .setExpiration(expiryDate)
-                .signWith(secretKey) // HS256 по умолчанию
+                .signWith(secretKey)
                 .compact();
     }
 
