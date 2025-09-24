@@ -1,12 +1,16 @@
 package com.example.demo.security;
 
 import com.example.demo.entity.User;
-import io.jsonwebtoken.*;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 
+import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -14,6 +18,24 @@ import java.util.Map;
 @Component
 public class JWTTokenProvider {
     public static final Logger LOG = LoggerFactory.getLogger(JWTTokenProvider.class);
+
+    private final SecretKey secretKey;
+
+    public JWTTokenProvider() {
+        byte[] keyBytes = SecurityConstants.SECRET.getBytes(StandardCharsets.UTF_8);
+
+        // Проверяем длину для HS256 (минимум 32 байта)
+        if (keyBytes.length < 32) {
+            LOG.warn("Secret key is too short ({} bytes). Using generated key.", keyBytes.length);
+            // Генерируем минимальный ключ если текущий слишком короткий
+            byte[] secureKey = new byte[32];
+            new java.security.SecureRandom().nextBytes(secureKey);
+            this.secretKey = Keys.hmacShaKeyFor(secureKey);
+        } else {
+            this.secretKey = Keys.hmacShaKeyFor(keyBytes);
+            LOG.info("Using provided secret key of {} bytes", keyBytes.length);
+        }
+    }
 
     public String generateToken(Authentication authentication) {
         User user = (User) authentication.getPrincipal();
@@ -28,21 +50,35 @@ public class JWTTokenProvider {
         claimsMap.put("firstname", user.getName());
         claimsMap.put("lastname", user.getLastname());
 
-        return Jwts.builder().setSubject(userId).addClaims(claimsMap).setIssuedAt(now).setExpiration(expiryDate).signWith(SignatureAlgorithm.HS512, SecurityConstants.SECRET).compact();
+        return Jwts.builder()
+                .setSubject(userId)
+                .addClaims(claimsMap)
+                .setIssuedAt(now)
+                .setExpiration(expiryDate)
+                .signWith(secretKey) // HS256 по умолчанию
+                .compact();
     }
 
     public boolean validateToken(String token) {
         try {
-            Jwts.parser().setSigningKey(SecurityConstants.SECRET).parseClaimsJws(token);
+            Jwts.parser()
+                    .verifyWith(secretKey)
+                    .build()
+                    .parseSignedClaims(token);
             return true;
-        } catch (SignatureException | MalformedJwtException | UnsupportedJwtException | IllegalArgumentException ex) {
-            LOG.error(ex.getMessage());
+        } catch (Exception ex) {
+            LOG.error("Invalid JWT token: {}", ex.getMessage());
             return false;
         }
     }
 
     public Long getUserIdFromToken(String token) {
-        Claims claims = Jwts.parser().setSigningKey(SecurityConstants.SECRET).parseClaimsJws(token).getBody();
+        Claims claims = Jwts.parser()
+                .verifyWith(secretKey)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+
         String id = (String) claims.get("id");
         return Long.parseLong(id);
     }
